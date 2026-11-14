@@ -1,0 +1,45 @@
+### 1. 获取 CSRF Token
+GET http://localhost:8080/api/auth/csrf
+
+> {%
+    client.global.set("csrfToken", response.body.token);
+    client.global.set("csrfHeader", response.body.headerName);
+
+    client.test("获取 CSRF Token 成功", function () {
+        client.assert(response.status === 200, "预期 HTTP 200");
+    });
+%}
+
+### 2. 登录
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+X-CSRF-TOKEN: {{csrfToken}}
+
+{
+  "username": "ai_club_app",
+  "password": "wangmuka123456789"
+}
+
+> {%
+    client.test("登录成功", function () {
+        client.assert(response.status === 200, "预期 HTTP 200");
+    });
+%}
+
+### 3. 登录后重新获取 CSRF Token
+GET http://localhost:8080/api/auth/csrf
+
+> {%
+    client.global.set("csrfToken", response.body.token);
+    client.global.set("csrfHeader", response.body.headerName);
+%}
+
+### 4. 查询当前登录账号
+GET http://localhost:8080/api/auth/me
+
+### 5. 退出登录
+POST http://localhost:8080/api/auth/logout
+X-CSRF-TOKEN: {{csrfToken}}
+
+### 6. 退出后查询，应返回 401
+GET http://localhost:8080/api/auth/me

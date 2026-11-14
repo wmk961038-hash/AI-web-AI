@@ -1,0 +1,12 @@
+node_modules
+dist
+.vite
+*.local
+.DS_Store
+.tmp
+.npm-cache
+.chrome-profile
+.preview-assets
+.preview-shots
+.preview-uploads
+.preview-browser*

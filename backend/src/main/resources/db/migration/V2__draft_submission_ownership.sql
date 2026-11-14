@@ -1,0 +1,2 @@
+ALTER TABLE content ADD COLUMN created_by VARCHAR(64) NULL;
+ALTER TABLE media_file ADD COLUMN uploaded_by BIGINT NULL;

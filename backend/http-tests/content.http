@@ -1,0 +1,368 @@
+# 已恢复第一版完整接口：可测试新增、编辑、预览、发布、下架、回收站、恢复与操作记录。
+
+@baseUrl = http://localhost:8080
+@username = ai_club_app
+@password = wangmuka123456789
+
+
+### 1. 获取登录需要的 CSRF Token
+GET {{baseUrl}}/api/auth/csrf
+
+> {%
+    client.global.set("contentTestCsrf", response.body.token);
+    client.global.set("contentTestCsrfHeader", response.body.headerName);
+
+    client.test("获取 CSRF 成功", function () {
+        client.assert(response.status === 200, "预期 200");
+    });
+%}
+
+
+### 2. 管理员登录
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+X-CSRF-TOKEN: {{contentTestCsrf}}
+
+{
+  "username": "{{username}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.test("登录成功", function () {
+        client.assert(response.status === 200, "预期 200");
+    });
+%}
+
+
+### 3. 登录更换 Session 后，重新获取 CSRF Token
+GET {{baseUrl}}/api/auth/csrf
+
+> {%
+    client.global.set("contentTestCsrf", response.body.token);
+    client.global.set("contentTestCsrfHeader", response.body.headerName);
+
+    client.test("更新 CSRF 成功", function () {
+        client.assert(response.status === 200, "预期 200");
+    });
+%}
+
+
+### 4. 查询公开内容列表：publicList()
+GET {{baseUrl}}/api/public/contents?page=1&size=12
+
+> {%
+    client.test("公开列表查询成功", function () {
+        client.assert(response.status === 200, "预期 200");
+        client.assert(Array.isArray(response.body.items), "items 应为数组");
+        client.assert(typeof response.body.total === "number", "应返回 total");
+    });
+%}
+
+
+### 5. 带筛选条件查询公开内容
+GET {{baseUrl}}/api/public/contents?type=PROJECT&page=1&size=12&archived=false&featured=true
+
+> {%
+    client.test("筛选查询成功", function () {
+        client.assert(response.status === 200, "预期 200");
+    });
+%}
+
+
+### 6. 查询固定页面：page()
+# key 可替换为 home、about、join
+GET {{baseUrl}}/api/public/pages/about
+
+> {%
+    client.test("固定页面查询成功", function () {
+        client.assert(response.status === 200, "预期 200");
+        client.assert(response.body.type === "PAGE", "应为固定页面");
+        client.assert(response.body.category === "about", "应为 about 页面");
+    });
+%}
+
+
+### 7. 查询后台内容列表：adminList()
+GET {{baseUrl}}/api/admin/contents?page=1&size=20&type=NEWS&status=DRAFT
+
+> {%
+    client.test("后台列表查询成功", function () {
+        client.assert(response.status === 200, "预期 200");
+        client.assert(Array.isArray(response.body.items), "items 应为数组");
+    });
+%}
+
+
+### 8. 新建测试新闻：create()
+# 自动保存返回的 ID 和 version，后面的请求继续使用
+POST {{baseUrl}}/api/admin/contents
+Content-Type: application/json
+{{contentTestCsrfHeader}}: {{contentTestCsrf}}
+
+{
+  "type": "NEWS",
+  "title": "HTTP Client 接口测试新闻",
+  "category": "新闻动态",
+  "summary": "仅用于验证接口，不是真实社团新闻。",
+  "body": "<h2>测试正文</h2><p>这是一条通过 IDEA HTTP Client 创建的测试内容。</p>",
+  "coverId": null,
+  "metadata": {
+    "sourceName": "接口测试",
+    "gallery": []
+  },
+  "sortOrder": 0,
+  "featured": false,
+  "pinned": false,
+  "archived": false,
+  "version": 0
+}
+
+> {%
+    client.test("创建成功且为草稿", function () {
+        client.assert(response.status === 200, "预期 200");
+        client.assert(response.body.status === "DRAFT", "新建应为草稿");
+        client.assert(response.body.id != null, "应返回 ID");
+    });
+
+    if (response.status === 200) {
+        client.global.set("contentTestId", response.body.id);
+        client.global.set("contentTestVersion", response.body.version);
+    }
+%}
+
+
+### 9. 查询后台详情 / 草稿预览：preview()
+GET {{baseUrl}}/api/admin/contents/{{contentTestId}}
+
+> {%
+    client.test("管理员可以查看草稿", function () {
+        client.assert(response.status === 200, "预期 200");
+        client.assert(response.body.status === "DRAFT", "应为草稿");
+    });
+%}
+
+
+### 10. 公开详情不能读取草稿：detail()
+# 即使已经登录，公开详情接口也只返回已发布内容
+GET {{baseUrl}}/api/public/contents/{{contentTestId}}
+
+> {%
+    client.test("草稿不公开", function () {
+        client.assert(response.status === 404, "草稿公开详情应返回 404");
+    });
+%}
+
+
+### 11. 修改内容：update()
+PUT {{baseUrl}}/api/admin/contents/{{contentTestId}}
+Content-Type: application/json
+{{contentTestCsrfHeader}}: {{contentTestCsrf}}
+
+{
+  "type": "NEWS",
+  "title": "HTTP Client 接口测试新闻（已修改）",
+  "category": "新闻动态",
+  "summary": "摘要已更新，仅用于验证接口。",
+  "body": "<h2>修改后的正文</h2><p>验证 PUT 更新内容接口。</p>",
+  "coverId": null,
+  "metadata": {
+    "sourceName": "接口测试",
+    "gallery": []
+  },
+  "sortOrder": 1,
+  "featured": false,
+  "pinned": true,
+  "archived": false,
+  "version": {{contentTestVersion}}
+}
+
+> {%
+    client.test("修改成功", function () {
+        client.assert(response.status === 200, "预期 200");
+        client.assert(
+            response.body.title === "HTTP Client 接口测试新闻（已修改）",
+            "标题应已更新"
+        );
+    });
+
+    if (response.status === 200) {
+        client.global.set("contentTestVersion", response.body.version);
+    }
+%}
+
+
+### 12. 发布内容：transition()，action=publish
+POST {{baseUrl}}/api/admin/contents/{{contentTestId}}/publish
+Content-Type: application/json
+{{contentTestCsrfHeader}}: {{contentTestCsrf}}
+
+{
+  "version": {{contentTestVersion}}
+}
+
+> {%
+    client.test("发布成功", function () {
+        client.assert(response.status === 200, "预期 200");
+        client.assert(response.body.status === "PUBLISHED", "应为已发布");
+    });
+
+    if (response.status === 200) {
+        client.global.set("contentTestVersion", response.body.version);
+    }
+%}
+
+
+### 13. 发布后查询公开详情：detail()
+GET {{baseUrl}}/api/public/contents/{{contentTestId}}
+
+> {%
+    client.test("已发布内容可以公开读取", function () {
+        client.assert(response.status === 200, "预期 200");
+        client.assert(response.body.status === "PUBLISHED", "应为已发布");
+    });
+%}
+
+
+### 14. 查询新闻公开列表
+GET {{baseUrl}}/api/public/contents?type=NEWS&page=1&size=100
+
+> {%
+    client.test("公开列表包含刚发布的内容", function () {
+        client.assert(response.status === 200, "预期 200");
+
+        var id = Number(client.global.get("contentTestId"));
+        client.assert(
+            response.body.items.some(function (item) {
+                return item.id === id;
+            }),
+            "前 100 条新闻中应包含测试内容"
+        );
+    });
+%}
+
+
+### 15. 下架内容：transition()，action=unpublish
+POST {{baseUrl}}/api/admin/contents/{{contentTestId}}/unpublish
+Content-Type: application/json
+{{contentTestCsrfHeader}}: {{contentTestCsrf}}
+
+{
+  "version": {{contentTestVersion}}
+}
+
+> {%
+    client.test("下架后变成草稿", function () {
+        client.assert(response.status === 200, "预期 200");
+        client.assert(response.body.status === "DRAFT", "应为草稿");
+    });
+
+    if (response.status === 200) {
+        client.global.set("contentTestVersion", response.body.version);
+    }
+%}
+
+
+### 16. 下架后公开详情应返回 404
+GET {{baseUrl}}/api/public/contents/{{contentTestId}}
+
+> {%
+    client.test("下架内容不再公开", function () {
+        client.assert(response.status === 404, "预期 404");
+    });
+%}
+
+
+### 17. 移入回收站：transition()，action=trash
+POST {{baseUrl}}/api/admin/contents/{{contentTestId}}/trash
+Content-Type: application/json
+{{contentTestCsrfHeader}}: {{contentTestCsrf}}
+
+{
+  "version": {{contentTestVersion}}
+}
+
+> {%
+    client.test("移入回收站成功", function () {
+        client.assert(response.status === 200, "预期 200");
+        client.assert(response.body.status === "TRASH", "应为回收站状态");
+    });
+
+    if (response.status === 200) {
+        client.global.set("contentTestVersion", response.body.version);
+    }
+%}
+
+
+### 18. 查询回收站列表：adminList()
+GET {{baseUrl}}/api/admin/contents?status=TRASH&page=1&size=20
+
+> {%
+    client.test("回收站列表查询成功", function () {
+        client.assert(response.status === 200, "预期 200");
+    });
+%}
+
+
+### 19. 从回收站恢复：transition()，action=restore
+POST {{baseUrl}}/api/admin/contents/{{contentTestId}}/restore
+Content-Type: application/json
+{{contentTestCsrfHeader}}: {{contentTestCsrf}}
+
+{
+  "version": {{contentTestVersion}}
+}
+
+> {%
+    client.test("恢复后为草稿", function () {
+        client.assert(response.status === 200, "预期 200");
+        client.assert(response.body.status === "DRAFT", "应恢复为草稿");
+    });
+
+    if (response.status === 200) {
+        client.global.set("contentTestVersion", response.body.version);
+    }
+%}
+
+
+### 20. 查询操作记录：audit()
+GET {{baseUrl}}/api/admin/audit?page=1&size=20
+
+> {%
+    client.test("操作记录查询成功", function () {
+        client.assert(response.status === 200, "预期 200");
+        client.assert(response.body.total > 0, "应存在操作记录");
+        client.assert(Array.isArray(response.body.items), "items 应为数组");
+    });
+%}
+
+
+### 21. 非法分页参数测试
+GET {{baseUrl}}/api/admin/audit?page=0&size=20
+
+> {%
+    client.test("非法分页被拒绝", function () {
+        client.assert(response.status === 400, "预期 400");
+    });
+%}
+
+
+### 22. 测试结束，将测试内容放回回收站
+POST {{baseUrl}}/api/admin/contents/{{contentTestId}}/trash
+Content-Type: application/json
+{{contentTestCsrfHeader}}: {{contentTestCsrf}}
+
+{
+  "version": {{contentTestVersion}}
+}
+
+> {%
+    client.test("测试内容已放入回收站", function () {
+        client.assert(response.status === 200, "预期 200");
+        client.assert(response.body.status === "TRASH", "应为回收站状态");
+    });
+
+    if (response.status === 200) {
+        client.global.set("contentTestVersion", response.body.version);
+    }
+%}
