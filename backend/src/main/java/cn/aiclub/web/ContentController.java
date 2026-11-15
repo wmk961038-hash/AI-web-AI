@@ -31,12 +31,18 @@ public class ContentController {
       @RequestParam(required = false) Boolean archived,
       @RequestParam(required = false) String cohort,
       @RequestParam(required = false) Boolean featured) {
-    return contentService.list(false, type, null, category, page, size, archived, cohort, featured);
+    return contentService.list(
+        false, type, null, category, page, size, archived, cohort, featured, null, null, null);
   }
 
   @GetMapping("/api/public/people/categories")
   Object personCategories() {
     return contentService.publicPersonCategories();
+  }
+
+  @GetMapping("/api/admin/people/categories")
+  Object adminPersonCategories() {
+    return contentService.personCategories(true);
   }
 
   @GetMapping("/api/public/contents/{id}")
@@ -61,9 +67,24 @@ public class ContentController {
       @RequestParam(required = false) String type,
       @RequestParam(required = false) String status,
       @RequestParam(required = false) String category,
+      @RequestParam(required = false) String keyword,
+      @RequestParam(required = false) String dateFrom,
+      @RequestParam(required = false) String dateTo,
       @RequestParam(defaultValue = "1") int page,
       @RequestParam(defaultValue = "20") int size) {
-    return contentService.list(true, type, status, category, page, size, null, null, null);
+    return contentService.list(
+        true,
+        type,
+        status,
+        category,
+        page,
+        size,
+        null,
+        null,
+        null,
+        keyword,
+        dateFrom,
+        dateTo);
   }
 
   @GetMapping("/api/admin/contents/{id}")

@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { api, message } from '../api'
+import PaginationBar from './PaginationBar.vue'
 
 const items = ref<Record<string, unknown>[]>([])
 const page = ref(1)
+const pageSize = ref(20)
 const total = ref(0)
 const busy = ref(false)
 const error = ref('')
+
+let requestId = 0
 
 function field(row: Record<string, unknown>, key: string) {
   return row[key] ?? row[key.toUpperCase()] ?? ''
@@ -18,16 +22,20 @@ function time(row: Record<string, unknown>) {
 }
 
 async function load() {
+  const currentRequest = ++requestId
   busy.value = true
   error.value = ''
   try {
-    const { data } = await api.get('/admin/audit', { params: { page: page.value, size: 20 } })
+    const { data } = await api.get('/admin/audit', {
+      params: { page: page.value, size: pageSize.value },
+    })
+    if (currentRequest !== requestId) return
     items.value = data.items
     total.value = data.total
   } catch (e) {
-    error.value = message(e)
+    if (currentRequest === requestId) error.value = message(e)
   } finally {
-    busy.value = false
+    if (currentRequest === requestId) busy.value = false
   }
 }
 
@@ -70,15 +78,15 @@ onMounted(load)
       </el-table>
     </div>
 
-    <div v-if="total > 20" class="nx-pagination">
-      <el-pagination
-        v-model:current-page="page"
-        :total="total"
-        :page-size="20"
-        layout="prev, pager, next, total"
-        background
-        @current-change="load"
-      />
-    </div>
+    <PaginationBar
+      v-if="total > 0"
+      v-model:page="page"
+      v-model:page-size="pageSize"
+      class="nx-pagination--admin"
+      :total="total"
+      :page-sizes="[20, 50, 100]"
+      layout="total, sizes, prev, pager, next, jumper"
+      @change="load"
+    />
   </section>
 </template>

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { api, message, type Content } from '../api'
+import { computed, onMounted, ref, watch } from 'vue'
+import { api, message, type Content, type Page } from '../api'
 import ContentCard from '../components/ContentCard.vue'
 import EmptyState from '../components/EmptyState.vue'
 import PageIntro from '../components/PageIntro.vue'
+import PaginationBar from '../components/PaginationBar.vue'
 import PeopleCard from '../components/PeopleCard.vue'
 import SkeletonCard from '../components/SkeletonCard.vue'
 
@@ -11,11 +12,19 @@ const props = defineProps<{ section: string }>()
 const items = ref<Content[]>([])
 const total = ref(0)
 const page = ref(1)
+const pageSize = ref(12)
 const filter = ref('')
 const category = ref('')
 const categoryOptions = ref<string[]>([])
 const error = ref('')
 const loading = ref(false)
+
+const rangeStart = computed(() =>
+  total.value ? (page.value - 1) * pageSize.value + 1 : 0,
+)
+const rangeEnd = computed(() => Math.min(page.value * pageSize.value, total.value))
+
+let requestId = 0
 
 const config = computed(() => {
   if (props.section === 'news') {
@@ -56,6 +65,7 @@ const config = computed(() => {
 })
 
 async function load() {
+  const currentRequest = ++requestId
   loading.value = true
   error.value = ''
   try {
@@ -66,20 +76,27 @@ async function load() {
         : props.section === 'projects'
           ? 'PROJECT'
           : 'PERSON')
-    const { data } = await api.get('/public/contents', {
+    const { data } = await api.get<Page<Content>>('/public/contents', {
       params: {
         type,
         page: page.value,
-        size: 12,
+        size: pageSize.value,
         category: category.value || undefined,
       },
     })
+    if (currentRequest !== requestId) return
+    const maxPage = Math.max(1, Math.ceil(data.total / pageSize.value))
+    if (!data.items.length && page.value > maxPage) {
+      page.value = maxPage
+      void load()
+      return
+    }
     total.value = data.total
     items.value = data.items
   } catch (e) {
-    error.value = message(e)
+    if (currentRequest === requestId) error.value = message(e)
   } finally {
-    loading.value = false
+    if (currentRequest === requestId) loading.value = false
   }
 }
 
@@ -94,6 +111,10 @@ function change() {
 }
 
 async function loadCategories() {
+  if (props.section !== 'people') {
+    categoryOptions.value = []
+    return
+  }
   try {
     categoryOptions.value = (await api.get('/public/people/categories')).data
   } catch {
@@ -101,8 +122,22 @@ async function loadCategories() {
   }
 }
 
+watch(
+  () => props.section,
+  () => {
+    filter.value = ''
+    category.value = ''
+    page.value = 1
+    pageSize.value = 12
+    items.value = []
+    total.value = 0
+    void loadCategories()
+    void load()
+  },
+)
+
 onMounted(() => {
-  if (props.section === 'people') void loadCategories()
+  void loadCategories()
   void load()
 })
 </script>
@@ -152,7 +187,10 @@ onMounted(() => {
             </select>
           </label>
 
-          <span class="nx-toolbar__count"><b>{{ total }}</b> 条内容</span>
+          <span class="nx-toolbar__count">
+            <template v-if="total">第 {{ rangeStart }}–{{ rangeEnd }} 条 / </template>
+            <b>{{ total }}</b> 条内容
+          </span>
         </div>
       </div>
 
@@ -185,16 +223,15 @@ onMounted(() => {
       </div>
       <EmptyState v-else-if="!error" />
 
-      <div v-if="total > 12" class="nx-pagination">
-        <el-pagination
-          v-model:current-page="page"
-          :page-size="12"
-          :total="total"
-          layout="prev, pager, next"
-          background
-          @current-change="load"
-        />
-      </div>
+      <PaginationBar
+        v-if="total > 0"
+        v-model:page="page"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[12, 24, 48]"
+        layout="total, sizes, prev, pager, next"
+        @change="load"
+      />
     </section>
   </div>
 </template>

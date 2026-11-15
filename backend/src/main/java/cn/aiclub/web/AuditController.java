@@ -21,6 +21,10 @@ public class AuditController {
     return Map.of(
         "total",
         db.queryForObject("SELECT COUNT(*) FROM audit_log", Long.class),
+        "page",
+        page,
+        "size",
+        size,
         "items",
         db.queryForList(
             "SELECT id,actor,action,target,created_at AS createdAt FROM audit_log ORDER BY id DESC"

@@ -6,6 +6,7 @@ import cn.aiclub.service.AuditService;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
+import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -38,8 +39,15 @@ public class AccountController {
   public record Reset(@NotBlank @Size(min = 12, max = 72) String password) {}
 
   @GetMapping
-  public Object list() {
-    return accounts.selectList(new QueryWrapper<Account>().orderByAsc("id"));
+  public Object list(
+      @RequestParam(defaultValue = "1") int page, @RequestParam(defaultValue = "20") int size) {
+    if (page < 1 || page > 100000 || size < 1 || size > 100)
+      throw new IllegalArgumentException();
+    var q = new QueryWrapper<Account>();
+    long total = accounts.selectCount(q);
+    q.orderByAsc("id").last("LIMIT " + size + " OFFSET " + ((page - 1) * size));
+    return Map.of(
+        "items", accounts.selectList(q), "total", total, "page", page, "size", size);
   }
 
   @PostMapping

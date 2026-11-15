@@ -2,26 +2,44 @@
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { api, message, refreshCsrf, type Account } from '../api'
+import { api, message, refreshCsrf, type Account, type Page } from '../api'
 import { useAuth } from '../stores/auth'
+import PaginationBar from './PaginationBar.vue'
 
 const auth = useAuth()
 const router = useRouter()
 const items = ref<Account[]>([])
+const total = ref(0)
+const page = ref(1)
+const pageSize = ref(10)
 const busy = ref(false)
 const error = ref('')
 const dialog = ref(false)
 const form = ref({ username: '', password: '', role: 'ADMIN' })
 
+let requestId = 0
+
 async function load() {
+  const currentRequest = ++requestId
   busy.value = true
   error.value = ''
   try {
-    items.value = (await api.get('/admin/accounts')).data
+    const { data } = await api.get<Page<Account>>('/admin/accounts', {
+      params: { page: page.value, size: pageSize.value },
+    })
+    if (currentRequest !== requestId) return
+    const maxPage = Math.max(1, Math.ceil(data.total / pageSize.value))
+    if (!data.items.length && page.value > maxPage) {
+      page.value = maxPage
+      await load()
+      return
+    }
+    items.value = data.items
+    total.value = data.total
   } catch (e) {
-    error.value = message(e)
+    if (currentRequest === requestId) error.value = message(e)
   } finally {
-    busy.value = false
+    if (currentRequest === requestId) busy.value = false
   }
 }
 
@@ -139,6 +157,17 @@ onMounted(load)
         </el-table-column>
       </el-table>
     </div>
+
+    <PaginationBar
+      v-if="total > 0"
+      v-model:page="page"
+      v-model:page-size="pageSize"
+      class="nx-pagination--admin"
+      :total="total"
+      :page-sizes="[10, 20, 50]"
+      layout="total, sizes, prev, pager, next, jumper"
+      @change="load"
+    />
 
     <el-dialog v-model="dialog" title="创建账号" width="min(92vw,480px)">
       <form class="nx-stack-form" @submit.prevent="create">

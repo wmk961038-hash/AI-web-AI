@@ -2,8 +2,18 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { api, date, labels, message, personRoleOf, states, type Content } from '../api'
+import {
+  api,
+  date,
+  labels,
+  message,
+  personRoleOf,
+  states,
+  type Content,
+  type Page,
+} from '../api'
 import { sectionByKey } from '../sections'
+import PaginationBar from '../components/PaginationBar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -13,16 +23,11 @@ const addTo = computed(() =>
   isPeople.value ? '/admin/people/new' : section.value?.addPath || '/admin',
 )
 const items = ref<Content[]>([])
+const total = ref(0)
 const loading = ref(true)
 const busy = ref(false)
 const error = ref('')
-const truncated = ref(false)
-const categoryOptions = computed(() => {
-  if (!isPeople.value) return section.value?.categories || []
-  return [...new Set(items.value.map((item) => item.category).filter(Boolean))].sort((a, b) =>
-    a.localeCompare(b, 'zh-CN'),
-  )
-})
+const categoryOptions = ref<string[]>([])
 
 const search = ref('')
 const statusFilter = ref('')
@@ -30,9 +35,17 @@ const categoryFilter = ref('')
 const dateFrom = ref('')
 const dateTo = ref('')
 const page = ref(1)
-const pageSize = 20
+const pageSize = ref(20)
 const mobileQuery = window.matchMedia('(max-width: 760px)')
 const isMobile = ref(mobileQuery.matches)
+
+const rangeStart = computed(() =>
+  total.value ? (page.value - 1) * pageSize.value + 1 : 0,
+)
+const rangeEnd = computed(() => Math.min(page.value * pageSize.value, total.value))
+
+let requestId = 0
+let searchTimer: number | undefined
 
 function syncMobile(event: MediaQueryListEvent | MediaQueryList) {
   isMobile.value = event.matches
@@ -44,43 +57,23 @@ const statusOptions = [
   { value: 'DRAFT', label: '草稿' },
 ]
 
-function dateOf(item: Content) {
-  return (item.createdAt || '').slice(0, 10)
-}
-
 function editTo(item: Content) {
   return isPeople.value ? `/admin/people/${item.id}` : `/admin/edit/${item.id}`
 }
 
-const filtered = computed(() => {
-  const keyword = search.value.trim().toLowerCase()
-  return items.value
-    .filter((item) => {
-      if (keyword) {
-        const haystack = `${item.title} ${item.summary} ${personRoleOf(item)} ${item.category}`.toLowerCase()
-        if (!haystack.includes(keyword)) return false
-      }
-      if (statusFilter.value && item.status !== statusFilter.value) return false
-      if (categoryFilter.value && item.category !== categoryFilter.value) return false
-      const day = dateOf(item)
-      if (dateFrom.value && day && day < dateFrom.value) return false
-      if (dateTo.value && day && day > dateTo.value) return false
-      return true
-    })
-})
-
-const paged = computed(() =>
-  filtered.value.slice((page.value - 1) * pageSize, page.value * pageSize),
-)
-
-watch([search, statusFilter, categoryFilter, dateFrom, dateTo], () => {
+function applyFilters() {
+  if (dateFrom.value && dateTo.value && dateFrom.value > dateTo.value) {
+    error.value = '开始日期不能晚于结束日期'
+    return
+  }
   page.value = 1
-})
+  void load()
+}
 
-watch(filtered, () => {
-  const maxPage = Math.max(1, Math.ceil(filtered.value.length / pageSize))
-  if (page.value > maxPage) page.value = maxPage
-})
+function onSearchInput() {
+  window.clearTimeout(searchTimer)
+  searchTimer = window.setTimeout(applyFilters, 300)
+}
 
 function resetFilters() {
   search.value = ''
@@ -89,6 +82,23 @@ function resetFilters() {
   dateFrom.value = ''
   dateTo.value = ''
   page.value = 1
+  void load()
+}
+
+async function loadCategoryOptions() {
+  const fallback = section.value?.categories || []
+  if (!isPeople.value) {
+    categoryOptions.value = fallback
+    return
+  }
+  try {
+    const { data } = await api.get<string[]>('/admin/people/categories')
+    categoryOptions.value = [...new Set([...fallback, ...data])].sort((a, b) =>
+      a.localeCompare(b, 'zh-CN'),
+    )
+  } catch {
+    categoryOptions.value = fallback
+  }
 }
 
 async function load() {
@@ -96,32 +106,35 @@ async function load() {
     await router.replace('/admin')
     return
   }
+  const currentRequest = ++requestId
   loading.value = true
   error.value = ''
-  truncated.value = false
   try {
-    const all: Content[] = []
-    let current = 1
-    let total = 0
-    while (current <= 20) {
-      const { data } = await api.get('/admin/contents', {
-        params: {
-          type: section.value.types.join(','),
-          page: current,
-          size: 100,
-        },
-      })
-      all.push(...data.items)
-      total = data.total
-      if (data.items.length < 100 || all.length >= total) break
-      current += 1
+    const { data } = await api.get<Page<Content>>('/admin/contents', {
+      params: {
+        type: section.value.types.join(','),
+        page: page.value,
+        size: pageSize.value,
+        status: statusFilter.value || undefined,
+        category: categoryFilter.value || undefined,
+        keyword: search.value.trim() || undefined,
+        dateFrom: dateFrom.value || undefined,
+        dateTo: dateTo.value || undefined,
+      },
+    })
+    if (currentRequest !== requestId) return
+    const maxPage = Math.max(1, Math.ceil(data.total / pageSize.value))
+    if (!data.items.length && page.value > maxPage) {
+      page.value = maxPage
+      void load()
+      return
     }
-    items.value = all
-    truncated.value = all.length < total
+    items.value = data.items
+    total.value = data.total
   } catch (e) {
-    error.value = message(e)
+    if (currentRequest === requestId) error.value = message(e)
   } finally {
-    loading.value = false
+    if (currentRequest === requestId) loading.value = false
   }
 }
 
@@ -163,13 +176,29 @@ async function publish(item: Content) {
   }
 }
 
+watch(
+  () => route.params.section,
+  () => {
+    search.value = ''
+    statusFilter.value = ''
+    categoryFilter.value = ''
+    dateFrom.value = ''
+    dateTo.value = ''
+    page.value = 1
+    void loadCategoryOptions()
+    void load()
+  },
+)
+
 onMounted(() => {
   syncMobile(mobileQuery)
   mobileQuery.addEventListener('change', syncMobile)
+  void loadCategoryOptions()
   void load()
 })
 
 onBeforeUnmount(() => {
+  window.clearTimeout(searchTimer)
   mobileQuery.removeEventListener('change', syncMobile)
 })
 </script>
@@ -186,7 +215,7 @@ onBeforeUnmount(() => {
       </div>
       <div class="nx-editor__top-actions">
         <span class="nx-manager__count">
-          共 <b>{{ items.length }}</b> 条
+          共 <b>{{ total }}</b> 条
         </span>
         <RouterLink class="nx-btn nx-btn--primary nx-manager__add" :to="addTo">
           <span>＋ 新增内容</span>
@@ -201,12 +230,14 @@ onBeforeUnmount(() => {
           <input
             v-model="search"
             :placeholder="isPeople ? '搜索姓名、类别或职务方向' : '搜索标题或摘要'"
+            @input="onSearchInput"
+            @keyup.enter="applyFilters"
           />
         </label>
 
         <label class="nx-manager__field">
           <span>状态</span>
-          <select v-model="statusFilter">
+          <select v-model="statusFilter" @change="applyFilters">
             <option v-for="option in statusOptions" :key="option.value" :value="option.value">
               {{ option.label }}
             </option>
@@ -215,7 +246,7 @@ onBeforeUnmount(() => {
 
         <label class="nx-manager__field">
           <span>{{ isPeople ? '类别' : '分类' }}</span>
-          <select v-model="categoryFilter">
+          <select v-model="categoryFilter" @change="applyFilters">
             <option value="">{{ isPeople ? '全部类别' : '全部分类' }}</option>
             <option v-for="option in categoryOptions" :key="option" :value="option">
               {{ option }}
@@ -226,9 +257,9 @@ onBeforeUnmount(() => {
         <label class="nx-manager__field">
           <span>上传时间</span>
           <span class="nx-manager__dates">
-            <input v-model="dateFrom" type="date" aria-label="开始日期" />
+            <input v-model="dateFrom" type="date" aria-label="开始日期" @change="applyFilters" />
             <i>—</i>
-            <input v-model="dateTo" type="date" aria-label="结束日期" />
+            <input v-model="dateTo" type="date" aria-label="结束日期" @change="applyFilters" />
           </span>
         </label>
 
@@ -237,11 +268,10 @@ onBeforeUnmount(() => {
 
       <div class="nx-manager__summary">
         <span>
-          共 <b>{{ filtered.length }}</b> 条符合条件
-          <template v-if="filtered.length !== items.length"> / 全部 {{ items.length }} 条</template>
+          共 <b>{{ total }}</b> 条
+          <template v-if="total"> · 当前 {{ rangeStart }}–{{ rangeEnd }}</template>
         </span>
         <span class="nx-manager__order-tip">置顶优先 · 上传时间倒序</span>
-        <span v-if="truncated" class="nx-manager__warning">内容较多，仅加载前 2000 条</span>
       </div>
 
       <p v-if="error" class="nx-notice nx-notice--error" role="alert">
@@ -250,7 +280,7 @@ onBeforeUnmount(() => {
       </p>
 
       <div v-if="isMobile" class="nx-manager__cards" v-loading="loading || busy">
-        <article v-for="row in paged" :key="row.id" class="nx-manager__card">
+        <article v-for="row in items" :key="row.id" class="nx-manager__card">
           <div class="nx-manager__card-top">
             <b>{{ row.title }}</b>
             <el-tag :type="row.status === 'PUBLISHED' ? 'success' : 'info'" effect="dark">
@@ -283,12 +313,12 @@ onBeforeUnmount(() => {
             <el-button v-else link type="success" @click="publish(row)">发布</el-button>
           </div>
         </article>
-        <p v-if="!paged.length" class="nx-manager__empty">暂无符合条件的条目</p>
+        <p v-if="!items.length" class="nx-manager__empty">暂无符合条件的条目</p>
       </div>
 
       <div v-else class="nx-manager__table">
         <el-table
-          :data="paged"
+          :data="items"
           v-loading="loading || busy"
           empty-text="暂无符合条件的条目"
           row-key="id"
@@ -342,15 +372,16 @@ onBeforeUnmount(() => {
         </el-table>
       </div>
 
-      <div v-if="filtered.length > pageSize" class="nx-pagination">
-        <el-pagination
-          v-model:current-page="page"
-          :page-size="pageSize"
-          :total="filtered.length"
-          layout="prev, pager, next, total"
-          background
-        />
-      </div>
+      <PaginationBar
+        v-if="total > 0"
+        v-model:page="page"
+        v-model:page-size="pageSize"
+        class="nx-pagination--admin"
+        :total="total"
+        :page-sizes="[20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        @change="load"
+      />
 
       <div class="nx-manager__foot">
         <RouterLink class="nx-link" to="/admin">返回内容管理 <i>←</i></RouterLink>

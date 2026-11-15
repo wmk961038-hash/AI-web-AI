@@ -8,6 +8,7 @@ import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.fasterxml.jackson.databind.*;
 import jakarta.validation.constraints.*;
 import java.time.*;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 import org.jsoup.Jsoup;
 import org.jsoup.safety.Safelist;
@@ -66,7 +67,10 @@ public class ContentService {
       int size,
       Boolean archived,
       String cohort,
-      Boolean featured) {
+      Boolean featured,
+      String keyword,
+      String dateFrom,
+      String dateTo) {
     if (page < 1 || page > 100000 || size < 1 || size > 100) throw new IllegalArgumentException();
     var q = new QueryWrapper<Content>();
     if (type != null && !type.isBlank()) q.in("type", Arrays.asList(type.split(",")));
@@ -76,6 +80,24 @@ public class ContentService {
     if (featured != null) q.eq("featured", featured);
     if (cohort != null && !cohort.isBlank())
       q.apply("LOCATE({0}, metadata) > 0", "\"cohort\":" + json.valueToTree(cohort).toString());
+    if (keyword != null && !keyword.isBlank()) {
+      String term = keyword.trim();
+      if (term.length() > 100) bad("搜索关键词不能超过 100 个字符");
+      q.and(
+          w ->
+              w.like("title", term)
+                  .or()
+                  .like("summary", term)
+                  .or()
+                  .like("person_role", term)
+                  .or()
+                  .like("category", term));
+    }
+    LocalDate from = parseDate(dateFrom, "开始日期");
+    LocalDate to = parseDate(dateTo, "结束日期");
+    if (from != null && to != null && from.isAfter(to)) bad("开始日期不能晚于结束日期");
+    if (from != null) q.ge("created_at", from.atStartOfDay());
+    if (to != null) q.lt("created_at", to.plusDays(1).atStartOfDay());
     if (!admin) q.eq("status", "PUBLISHED");
     else if (status != null && !status.isBlank()) q.eq("status", status);
     else q.ne("status", "TRASH");
@@ -87,10 +109,24 @@ public class ContentService {
     return Map.of("items", contents.selectList(q), "total", total, "page", page, "size", size);
   }
 
+  private static LocalDate parseDate(String value, String label) {
+    if (value == null || value.isBlank()) return null;
+    try {
+      return LocalDate.parse(value.trim());
+    } catch (DateTimeParseException ex) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, label + "格式应为 yyyy-MM-dd");
+    }
+  }
+
   public List<String> publicPersonCategories() {
+    return personCategories(false);
+  }
+
+  public List<String> personCategories(boolean admin) {
     return db.queryForList(
-        "SELECT DISTINCT category FROM content WHERE type='PERSON' AND status='PUBLISHED'"
-            + " AND category <> '' ORDER BY category",
+        "SELECT DISTINCT category FROM content WHERE type='PERSON' AND category <> ''"
+            + (admin ? " AND status <> 'TRASH'" : " AND status='PUBLISHED'")
+            + " ORDER BY category",
         String.class);
   }
 

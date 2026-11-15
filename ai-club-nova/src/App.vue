@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { ElConfigProvider } from 'element-plus'
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import AuroraBackground from './components/AuroraBackground.vue'
 import ParticleField from './components/ParticleField.vue'
 import PointerGlow from './components/PointerGlow.vue'
@@ -16,23 +18,25 @@ const pageKey = computed(() => route.fullPath)
 </script>
 
 <template>
-  <div class="nx-app" :class="{ 'is-admin': isAdmin, 'is-login': isLogin }">
-    <a v-if="!isAdmin" class="nx-skip" href="#main">跳转到主要内容</a>
+  <ElConfigProvider :locale="zhCn">
+    <div class="nx-app" :class="{ 'is-admin': isAdmin, 'is-login': isLogin }">
+      <a v-if="!isAdmin" class="nx-skip" href="#main">跳转到主要内容</a>
 
-    <AuroraBackground />
-    <ParticleField v-if="!isAdmin" />
-    <PointerGlow v-if="!isAdmin" />
+      <AuroraBackground />
+      <ParticleField v-if="!isAdmin" />
+      <PointerGlow v-if="!isAdmin" />
 
-    <SiteHeader v-if="showChrome" />
+      <SiteHeader v-if="showChrome" />
 
-    <main id="main" class="nx-main" :class="{ 'has-chrome': showChrome, 'is-admin': isAdmin }">
-      <RouterView v-slot="{ Component }">
-        <Transition name="page" mode="out-in">
-          <component :is="Component" :key="pageKey" />
-        </Transition>
-      </RouterView>
-    </main>
+      <main id="main" class="nx-main" :class="{ 'has-chrome': showChrome, 'is-admin': isAdmin }">
+        <RouterView v-slot="{ Component }">
+          <Transition name="page" mode="out-in">
+            <component :is="Component" :key="pageKey" />
+          </Transition>
+        </RouterView>
+      </main>
 
-    <SiteFooter v-if="showChrome" />
-  </div>
+      <SiteFooter v-if="showChrome" />
+    </div>
+  </ElConfigProvider>
 </template>

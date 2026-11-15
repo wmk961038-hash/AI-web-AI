@@ -1160,6 +1160,38 @@
   color: var(--nx-dim);
 }
 
+.nx-pagination--admin {
+  margin-top: 18px;
+}
+
+.nx-pagination--admin .el-pagination {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.nx-pagination .el-pagination__sizes {
+  margin-right: 8px;
+}
+
+.nx-pagination .el-pagination__sizes .el-select {
+  width: 108px;
+}
+
+.nx-pagination .el-pagination__jump {
+  margin-left: 8px;
+  font-family: var(--nx-font-mono);
+  font-size: 10px;
+  color: var(--nx-dim);
+}
+
+@media (max-width: 760px) {
+  .nx-pagination .el-pagination__total,
+  .nx-pagination .el-pagination__sizes,
+  .nx-pagination .el-pagination__jump {
+    display: none;
+  }
+}
+
 .el-input__wrapper {
   background: rgba(255, 255, 255, 0.04) !important;
   box-shadow: 0 0 0 1px var(--nx-line) inset !important;

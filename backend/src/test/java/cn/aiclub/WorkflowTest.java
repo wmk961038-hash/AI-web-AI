@@ -10,6 +10,7 @@ import cn.aiclub.model.*;
 import com.fasterxml.jackson.databind.*;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import javax.imageio.ImageIO;
@@ -163,6 +164,77 @@ class WorkflowTest {
         .andExpect(jsonPath("$.items[0].title").value("置顶旧内容"))
         .andExpect(jsonPath("$.items[1].title").value("普通新内容"))
         .andExpect(jsonPath("$.items[2].title").value("普通旧内容"));
+  }
+
+  @Test
+  void adminContentListSupportsServerPaginationAndFilters() throws Exception {
+    var session = login(account("ADMIN"));
+    String stamp = UUID.randomUUID().toString().replace("-", "");
+    String category = "分页测试-" + stamp;
+    for (int i = 1; i <= 3; i++) {
+      var in = input("NEWS");
+      in.put("title", "分页搜索-" + stamp + "-" + i);
+      in.put("category", category);
+      create(session, in);
+    }
+
+    mvc.perform(
+            get("/api/admin/contents")
+                .session(session)
+                .param("category", category)
+                .param("page", "1")
+                .param("size", "2"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total").value(3))
+        .andExpect(jsonPath("$.page").value(1))
+        .andExpect(jsonPath("$.size").value(2))
+        .andExpect(jsonPath("$.items.length()").value(2));
+
+    mvc.perform(
+            get("/api/admin/contents")
+                .session(session)
+                .param("category", category)
+                .param("page", "2")
+                .param("size", "2"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total").value(3))
+        .andExpect(jsonPath("$.items.length()").value(1));
+
+    mvc.perform(
+            get("/api/admin/contents")
+                .session(session)
+                .param("category", category)
+                .param("keyword", stamp))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total").value(3));
+
+    mvc.perform(
+            get("/api/admin/contents")
+                .session(session)
+                .param("category", category)
+                .param("dateFrom", LocalDate.now().plusDays(1).toString()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total").value(0));
+
+    mvc.perform(
+            get("/api/admin/contents")
+                .session(session)
+                .param("category", category)
+                .param("dateTo", LocalDate.now().minusDays(1).toString()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.total").value(0));
+
+    mvc.perform(
+            get("/api/admin/contents")
+                .session(session)
+                .param("category", category)
+                .param("dateFrom", "not-a-date"))
+        .andExpect(status().isBadRequest());
+
+    mvc.perform(get("/api/admin/contents").session(session).param("page", "0"))
+        .andExpect(status().isBadRequest());
+    mvc.perform(get("/api/admin/contents").session(session).param("size", "101"))
+        .andExpect(status().isBadRequest());
   }
 
   Content orderFixture(String title, int sortOrder, boolean pinned, LocalDateTime createdAt) {
@@ -354,6 +426,13 @@ class WorkflowTest {
             .getResponse()
             .getContentAsString();
     assertThat(draftCategories).doesNotContain("测试人物类别");
+    String adminCategories =
+        mvc.perform(get("/api/admin/people/categories").session(session))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    assertThat(adminCategories).contains("测试人物类别");
 
     transition(session, id, "publish", 0);
     String publishedCategories =
@@ -387,6 +466,17 @@ class WorkflowTest {
                 .getContentAsString());
     long id = c.get("id").asLong();
     var editor = login(name);
+    mvc.perform(
+            get("/api/admin/accounts")
+                .session(root)
+                .param("page", "1")
+                .param("size", "1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.page").value(1))
+        .andExpect(jsonPath("$.size").value(1))
+        .andExpect(jsonPath("$.items.length()").value(1));
+    mvc.perform(get("/api/admin/accounts").session(root).param("size", "101"))
+        .andExpect(status().isBadRequest());
     mvc.perform(get("/api/admin/accounts").session(admin)).andExpect(status().isForbidden());
     mvc.perform(
             post("/api/admin/accounts/" + id + "/password")

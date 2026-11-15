@@ -118,9 +118,9 @@ npm run preview   # 本地检查 dist 与 /api 代理
 | `/` | 首页 Hero、精选图片 / 轨道视觉、首页推荐动态、重点项目、首页推荐荣誉、加入入口；仅展示勾选“首页推荐”的已发布内容，接口失败可重试 |
 | `/about` | 固定页面 `about`：标题、摘要、封面、富文本正文 |
 | `/join` | 固定页面 `join`：正文、封面、`joinUrl` 外部报名按钮 |
-| `/news` | 新闻 / 活动列表：类型切换、分类筛选、计数、12 条 / 页分页 |
-| `/projects` | 项目与成果列表：分类筛选、计数、分页 |
-| `/people` | 师生风采列表：人物卡片只展示姓名、类别、图片、职务方向；类别筛选来自已发布人物 |
+| `/news` | 新闻 / 活动列表：类型切换、分类筛选、计数、服务端分页，可选 12 / 24 / 48 条每页 |
+| `/projects` | 项目与成果列表：分类筛选、计数、服务端分页，可选 12 / 24 / 48 条每页 |
+| `/people` | 师生风采列表：人物卡片只展示姓名、类别、图片、职务方向；类别筛选来自已发布人物；服务端分页，可选 12 / 24 / 48 条每页 |
 | `/contents/:id` | 详情：人物详情展示姓名、类别、职务方向、相关图片、简介；其他内容保留活动时间 / 地点 / 状态、成员信息、封面、正文、相册、图片来源、仓库 / 演示 / 原文链接、图片放大 |
 | `/login` | 管理员登录、错误提示、登录后跳转；含“浏览官网”入口 |
 | 其他 | 404 页面 |
@@ -131,21 +131,21 @@ npm run preview   # 本地检查 dist 与 /api 代理
 | --- | --- |
 | `/admin` | 五个固定栏目卡片：关于我们、新闻与活动、项目与成果、师生风采、加入我们；每个栏目提供编辑与预览，不再提供全局新建和栏目级下架 |
 | `/admin/pages/:key` | 编辑页面 A（`about` / `join`）：标题、摘要、wangEditor 正文、资料来源 / 原文链接 / 署名 / 报名链接；不提供相册、封面和发布设置，保存时保留原有封面、推荐等字段 |
-| `/admin/section/:section` | 编辑页面 B（`news` / `projects` / `people`）：列出全部条目，支持关键词、状态、分类、上传时间查询；置顶优先、其余按上传时间倒序；右上角新增；行内编辑 / 预览 / 下架（转草稿） / 草稿发布；人物栏目使用专用人物编辑器 |
+| `/admin/section/:section` | 编辑页面 B（`news` / `projects` / `people`）：服务端分页列表，支持关键词、状态、分类、上传时间查询；置顶优先、其余按上传时间倒序；右上角新增；行内编辑 / 预览 / 下架（转草稿） / 草稿发布；人物栏目使用专用人物编辑器 |
 | `/admin/people/:id` | 人物编辑器：仅维护姓名、类别、职务方向、相关图片、简介五个字段；支持保存、保存并预览、发布；不提供摘要、类型、排序、推荐、置顶、归档、相册和发布设置 |
 | `/admin/edit/:id` | 条目编辑器：标题、摘要、wangEditor 正文、分类、首页推荐、置顶、按届别归档、封面、相册、活动 / 项目 / 成员扩展字段、保存、保存并预览、保存并发布、离开未保存提醒；人物会自动跳转到专用编辑器 |
 | `/admin/edit/new?section=...` | 从 B 栏目新增条目，按栏目限定内容类型 |
 | `/admin/preview/:id` | 管理员草稿 / 已发布内容预览，显示预览提示 |
-| `/admin`（操作记录） | 操作人、操作、对象、时间分页表格 |
-| `/admin`（账号管理，超级管理员） | 账号列表、创建账号、启用 / 停用、调整角色、重置密码 |
+| `/admin`（操作记录） | 操作人、操作、对象、时间服务端分页表格，可选 20 / 50 / 100 条每页 |
+| `/admin`（账号管理，超级管理员） | 账号列表服务端分页、创建账号、启用 / 停用、调整角色、重置密码 |
 
 ### 接口契约
 
-继续使用现有后端的接口；本次只新增一个公开类别接口，并为人物内容增加 `person_role` 存储：
+列表接口统一返回 `{ items, total, page, size }`；管理内容列表额外支持 `keyword`、`dateFrom`、`dateTo` 服务端筛选：
 
 ```text
 GET  /api/public/pages/{key}
-GET  /api/public/contents
+GET  /api/public/contents?type=&category=&page=&size=&featured=
 GET  /api/public/contents/{id}
 GET  /api/public/people/categories
 GET  /api/media/{id}
@@ -154,17 +154,18 @@ POST /api/auth/login
 GET  /api/auth/me
 POST /api/auth/logout
 POST /api/auth/password
-GET  /api/admin/contents
+GET  /api/admin/contents?type=&status=&category=&keyword=&dateFrom=&dateTo=&page=&size=
 GET  /api/admin/contents/{id}
 POST /api/admin/contents
 PUT  /api/admin/contents/{id}
 POST /api/admin/contents/{id}/{publish|unpublish|trash|restore}
+GET  /api/admin/people/categories
 POST /api/admin/media
-GET  /api/admin/accounts
+GET  /api/admin/accounts?page=&size=
 POST /api/admin/accounts
 PUT  /api/admin/accounts/{id}
 POST /api/admin/accounts/{id}/password
-GET  /api/admin/audit
+GET  /api/admin/audit?page=&size=
 ```
 
 请求体、版本号并发校验、CSRF、Cookie 会话、上传大小与格式限制全部沿用原实现。
