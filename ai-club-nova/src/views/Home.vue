@@ -31,7 +31,9 @@ onMounted(async () => {
       api.get('/public/contents', {
         params: { type: 'NEWS,ACTIVITY', featured: true, size: 3 },
       }),
-      api.get('/public/contents', { params: { type: 'PROJECT', featured: true, size: 3 } }),
+      api.get('/public/contents', {
+        params: { type: 'PROJECT', category: '技术项目', featured: true, size: 3 },
+      }),
       api.get('/public/contents', {
         params: {
           type: 'PROJECT',
