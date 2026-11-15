@@ -115,6 +115,36 @@ button {
   padding: 0;
 }
 
+/* All editable fields use a black surface with light text. */
+input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not(
+    [type='color']
+  ),
+textarea,
+select {
+  background-color: #000 !important;
+  color: #fff !important;
+  color-scheme: dark;
+  caret-color: var(--nx-cyan);
+}
+
+input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not(
+    [type='color']
+  )::placeholder,
+textarea::placeholder {
+  color: #94a3b8 !important;
+  opacity: 1;
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill {
+  -webkit-text-fill-color: #fff !important;
+  -webkit-box-shadow: 0 0 0 1000px #000 inset !important;
+  caret-color: #fff;
+  transition: background-color 9999s ease-in-out 0s;
+}
+
 img {
   display: block;
   max-width: 100%;
