@@ -64,6 +64,7 @@ export interface Content {
   type: string
   title: string
   category: string
+  personRole?: string
   summary: string
   body: string
   coverId?: number
@@ -74,6 +75,7 @@ export interface Content {
   pinned: boolean
   archived: boolean
   version: number
+  createdAt?: string
   updatedAt?: string
   publishedAt?: string
 }
@@ -105,6 +107,10 @@ export function meta(c: Content): Meta {
   } catch {
     return {}
   }
+}
+
+export function personRoleOf(c: Content) {
+  return c.personRole?.trim() || meta(c).position?.trim() || ''
 }
 
 export function activityState(c: Content) {

@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { api, meta, message, date, labels, activityState, mediaUrl, type Content } from '../api'
 import ImageLightbox from '../components/ImageLightbox.vue'
+import PersonProfile from '../components/PersonProfile.vue'
 
 const props = defineProps<{ preview?: boolean }>()
 const route = useRoute()
@@ -20,7 +21,6 @@ const hasAside = computed(() => {
   const md = m.value
   return (
     item.value.type === 'ACTIVITY' ||
-    item.value.type === 'PERSON' ||
     !!md.members ||
     !!md.repository ||
     !!md.demo ||
@@ -104,7 +104,9 @@ onBeforeUnmount(() => window.removeEventListener('scroll', onScroll))
       <div class="nx-article-skeleton__block"></div>
     </div>
 
-    <article v-if="item" class="nx-article">
+    <PersonProfile v-if="item && item.type === 'PERSON'" :item="item" />
+
+    <article v-else-if="item" class="nx-article">
       <header class="nx-article__head" v-reveal>
         <p class="nx-kicker">{{ labels[item.type] }} / {{ item.category || 'AI CLUB' }}</p>
         <h1 class="nx-article__title">{{ item.title }}</h1>
@@ -147,20 +149,6 @@ onBeforeUnmount(() => window.removeEventListener('scroll', onScroll))
               <div>
                 <dt>地点</dt>
                 <dd>{{ m.location || '待补充' }}</dd>
-              </div>
-            </dl>
-          </div>
-
-          <div v-if="item.type === 'PERSON'" class="nx-facts">
-            <p class="nx-facts__title">成员信息</p>
-            <dl>
-              <div>
-                <dt>身份</dt>
-                <dd>{{ m.position || '身份待补充' }}</dd>
-              </div>
-              <div>
-                <dt>届别</dt>
-                <dd>{{ m.cohort || '届别待补充' }}</dd>
               </div>
             </dl>
           </div>

@@ -9,12 +9,32 @@ function toTop() {
     <div class="nx-footer__glow" aria-hidden="true"></div>
     <div class="nx-footer__inner">
       <div class="nx-footer__brand">
-        <RouterLink class="nx-footer__logo" to="/">
-          <span class="nx-footer__logo-mark">AI<span>✳</span></span>
-          <span class="nx-footer__logo-text">人工智能社<small>ARTIFICIAL INTELLIGENCE CLUB</small></span>
+        <RouterLink class="nx-footer__logo" to="/" aria-label="人工智能社首页">
+          <span class="nx-footer__logo-plate">
+            <img
+              src="/brand/club-logo.png"
+              alt="人工智能社"
+              width="1200"
+              height="285"
+              loading="lazy"
+              decoding="async"
+            />
+          </span>
         </RouterLink>
         <p>在这里，让好奇发生。</p>
         <p class="nx-footer__tags">人工智能 · 竞赛实践 · 科研探索</p>
+
+        <div class="nx-footer__school">
+          <span class="nx-footer__school-label">学院标识 · SCHOOL</span>
+          <img
+            src="/brand/school-wordmark.png"
+            alt="通信与信息工程学院"
+            width="1400"
+            height="293"
+            loading="lazy"
+            decoding="async"
+          />
+        </div>
       </div>
 
       <div class="nx-footer__col">

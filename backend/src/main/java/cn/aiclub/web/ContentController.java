@@ -34,6 +34,11 @@ public class ContentController {
     return contentService.list(false, type, null, category, page, size, archived, cohort, featured);
   }
 
+  @GetMapping("/api/public/people/categories")
+  Object personCategories() {
+    return contentService.publicPersonCategories();
+  }
+
   @GetMapping("/api/public/contents/{id}")
   Content detail(@PathVariable long id) {
     return contentService.getContent(id, false);

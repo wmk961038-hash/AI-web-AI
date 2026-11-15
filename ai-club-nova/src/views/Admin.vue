@@ -1,25 +1,20 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { api, labels, states, date, message, refreshCsrf, type Content } from '../api'
+import { ElMessage } from 'element-plus'
+import { api, message, refreshCsrf } from '../api'
 import { useAuth } from '../stores/auth'
 import AdminAccounts from '../components/AdminAccounts.vue'
 import AdminAudit from '../components/AdminAudit.vue'
+import AdminSections from '../components/AdminSections.vue'
 import BrandMark from '../components/BrandMark.vue'
 
 const auth = useAuth()
 const router = useRouter()
 const tab = ref('content')
 const navOpen = ref(false)
-const items = ref<Content[]>([])
-const page = ref(1)
-const total = ref(0)
-const type = ref('')
-const status = ref('')
+const contentTotal = ref(0)
 const busy = ref(false)
-const error = ref('')
-
 const passwordDialog = ref(false)
 const passwordForm = ref({ oldPassword: '', newPassword: '' })
 
@@ -29,55 +24,9 @@ const tabTitles: Record<string, { title: string; eyebrow: string }> = {
   accounts: { title: '账号管理', eyebrow: 'ACCOUNTS & ROLES' },
 }
 
-async function load() {
-  busy.value = true
-  error.value = ''
-  try {
-    const { data } = await api.get('/admin/contents', {
-      params: {
-        type: type.value || undefined,
-        status: status.value || undefined,
-        page: page.value,
-        size: 20,
-      },
-    })
-    items.value = data.items
-    total.value = data.total
-  } catch (e) {
-    error.value = message(e)
-  } finally {
-    busy.value = false
-  }
-}
-
-function filter() {
-  page.value = 1
-  void load()
-}
-
 function selectTab(name: string) {
   tab.value = name
   navOpen.value = false
-  if (name === 'content') void load()
-}
-
-async function transition(c: Content, action: string) {
-  try {
-    await ElMessageBox.confirm(
-      '确定' +
-        { publish: '发布', unpublish: '下架', trash: '移入回收站', restore: '恢复为草稿' }[action] +
-        '「' +
-        c.title +
-        '」？',
-      '内容操作',
-      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' },
-    )
-    await api.post('/admin/contents/' + c.id + '/' + action, { version: c.version })
-    ElMessage.success('操作成功')
-    await load()
-  } catch (e) {
-    if (e !== 'cancel' && e !== 'close') ElMessage.error(message(e))
-  }
 }
 
 async function logout() {
@@ -103,8 +52,6 @@ async function changePassword() {
     busy.value = false
   }
 }
-
-onMounted(load)
 </script>
 
 <template>
@@ -126,13 +73,10 @@ onMounted(load)
 
       <nav class="nx-admin__nav" aria-label="后台导航">
         <p class="nx-admin__nav-label">WORKSPACE</p>
-        <button
-          :class="{ active: tab === 'content' }"
-          @click="selectTab('content')"
-        >
+        <button :class="{ active: tab === 'content' }" @click="selectTab('content')">
           <span class="nx-admin__nav-icon">▤</span>
           <span>内容管理</span>
-          <small>{{ total }}</small>
+          <small>{{ contentTotal }}</small>
         </button>
         <button :class="{ active: tab === 'audit' }" @click="selectTab('audit')">
           <span class="nx-admin__nav-icon">◷</span>
@@ -183,147 +127,9 @@ onMounted(load)
       </header>
 
       <div class="nx-admin__content">
-        <AdminAccounts v-if="tab === 'accounts' && auth.user?.role === 'SUPER_ADMIN'" />
+        <AdminSections v-if="tab === 'content'" @total="contentTotal = $event" />
+        <AdminAccounts v-else-if="tab === 'accounts' && auth.user?.role === 'SUPER_ADMIN'" />
         <AdminAudit v-else-if="tab === 'audit'" />
-        <template v-else>
-          <div class="nx-admin__toolbar">
-            <div class="nx-admin__filters">
-              <el-select v-model="type" clearable placeholder="全部内容" @change="filter">
-                <el-option
-                  v-for="(label, key) in labels"
-                  :key="key"
-                  :label="label"
-                  :value="key"
-                />
-              </el-select>
-              <el-select
-                v-model="status"
-                clearable
-                placeholder="全部状态（不含回收站）"
-                @change="filter"
-              >
-                <el-option
-                  v-for="(label, key) in states"
-                  :key="key"
-                  :label="label"
-                  :value="key"
-                />
-              </el-select>
-            </div>
-            <div class="nx-admin__toolbar-actions">
-              <span class="nx-admin__count"><b>{{ total }}</b> 条内容</span>
-              <el-button type="primary" @click="router.push('/admin/edit/new')">
-                ＋ 新建内容
-              </el-button>
-            </div>
-          </div>
-
-          <p class="nx-admin__hint">
-            首页精选图和介绍在“页面设置”中维护；勾选项目“首页推荐”或动态“置顶”可调整首页展示。已发布内容保存修改后立即生效。
-          </p>
-
-          <p v-if="error" class="nx-notice nx-notice--error" role="alert">
-            <span>{{ error }}</span>
-            <button @click="load">重试</button>
-          </p>
-
-          <div class="nx-admin__table">
-            <el-table :data="items" v-loading="busy" empty-text="暂无内容">
-              <el-table-column label="标题" min-width="260">
-                <template #default="{ row }">
-                  <div class="nx-admin__title-cell">
-                    <b>{{ row.title }}</b>
-                    <small class="nx-admin__table-sub">
-                      {{ labels[row.type] }} · {{ row.category || '未分类' }}
-                      <span v-if="row.featured">· 首页推荐</span>
-                      <span v-if="row.pinned">· 置顶</span>
-                      <span v-if="row.archived">· 已归档</span>
-                    </small>
-                  </div>
-                </template>
-              </el-table-column>
-              <el-table-column label="状态" width="110">
-                <template #default="{ row }">
-                  <el-tag
-                    :type="
-                      row.status === 'PUBLISHED'
-                        ? 'success'
-                        : row.status === 'TRASH'
-                          ? 'danger'
-                          : 'info'
-                    "
-                    effect="dark"
-                  >
-                    {{ states[row.status] }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="更新时间" width="130">
-                <template #default="{ row }">{{ date(row.updatedAt) }}</template>
-              </el-table-column>
-              <el-table-column label="操作" min-width="300">
-                <template #default="{ row }">
-                  <div class="nx-admin__row-actions">
-                    <el-button
-                      v-if="row.status !== 'TRASH'"
-                      link
-                      type="primary"
-                      @click="router.push('/admin/edit/' + row.id)"
-                    >
-                      编辑
-                    </el-button>
-                    <RouterLink class="nx-admin__row-link" :to="'/admin/preview/' + row.id">
-                      预览
-                    </RouterLink>
-                    <el-button
-                      v-if="row.status === 'DRAFT'"
-                      link
-                      type="success"
-                      @click="transition(row, 'publish')"
-                    >
-                      发布
-                    </el-button>
-                    <el-button
-                      v-if="row.status === 'PUBLISHED'"
-                      link
-                      type="warning"
-                      @click="transition(row, 'unpublish')"
-                    >
-                      下架
-                    </el-button>
-                    <el-button
-                      v-if="row.status !== 'TRASH' && row.type !== 'PAGE'"
-                      link
-                      type="danger"
-                      @click="transition(row, 'trash')"
-                    >
-                      回收站
-                    </el-button>
-                    <el-button
-                      v-if="row.status === 'TRASH'"
-                      link
-                      type="primary"
-                      @click="transition(row, 'restore')"
-                    >
-                      恢复
-                    </el-button>
-                  </div>
-                </template>
-              </el-table-column>
-            </el-table>
-          </div>
-
-          <div v-if="total > 20" class="nx-pagination">
-            <el-pagination
-              v-model:current-page="page"
-              :page-size="20"
-              :total="total"
-              layout="prev, pager, next, total"
-              background
-              @current-change="load"
-            />
-          </div>
-        </template>
       </div>
     </div>
 

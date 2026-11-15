@@ -4,6 +4,7 @@ import { api, message, type Content } from '../api'
 import ContentCard from '../components/ContentCard.vue'
 import EmptyState from '../components/EmptyState.vue'
 import PageIntro from '../components/PageIntro.vue'
+import PeopleCard from '../components/PeopleCard.vue'
 import SkeletonCard from '../components/SkeletonCard.vue'
 
 const props = defineProps<{ section: string }>()
@@ -12,7 +13,7 @@ const total = ref(0)
 const page = ref(1)
 const filter = ref('')
 const category = ref('')
-const cohort = ref('')
+const categoryOptions = ref<string[]>([])
 const error = ref('')
 const loading = ref(false)
 
@@ -71,7 +72,6 @@ async function load() {
         page: page.value,
         size: 12,
         category: category.value || undefined,
-        cohort: cohort.value || undefined,
       },
     })
     total.value = data.total
@@ -93,7 +93,18 @@ function change() {
   void load()
 }
 
-onMounted(load)
+async function loadCategories() {
+  try {
+    categoryOptions.value = (await api.get('/public/people/categories')).data
+  } catch {
+    categoryOptions.value = []
+  }
+}
+
+onMounted(() => {
+  if (props.section === 'people') void loadCategories()
+  void load()
+})
 </script>
 
 <template>
@@ -121,22 +132,24 @@ onMounted(load)
         </div>
 
         <div class="nx-toolbar__right">
-          <label v-if="section === 'projects' || section === 'news'" class="nx-field nx-field--select">
-            <span>分类</span>
-            <select v-model="category" aria-label="成果分类" @change="change">
-              <option value="">全部分类</option>
-              <option v-for="option in config.categories" :key="option">{{ option }}</option>
-            </select>
-          </label>
-
-          <label v-if="section === 'people'" class="nx-field nx-field--search">
-            <span>届别</span>
-            <input
-              v-model="cohort"
-              placeholder="如 2026"
-              aria-label="届别筛选"
+          <label
+            v-if="section === 'projects' || section === 'news' || section === 'people'"
+            class="nx-field nx-field--select"
+          >
+            <span>{{ section === 'people' ? '类别' : '分类' }}</span>
+            <select
+              v-model="category"
+              :aria-label="section === 'people' ? '人物类别' : '内容分类'"
               @change="change"
-            />
+            >
+              <option value="">{{ section === 'people' ? '全部类别' : '全部分类' }}</option>
+              <option
+                v-for="option in section === 'people' ? categoryOptions : config.categories"
+                :key="option"
+              >
+                {{ option }}
+              </option>
+            </select>
           </label>
 
           <span class="nx-toolbar__count"><b>{{ total }}</b> 条内容</span>
@@ -152,13 +165,23 @@ onMounted(load)
         <SkeletonCard v-for="n in 6" :key="n" />
       </div>
       <div v-else-if="items.length" class="nx-grid nx-grid--listing">
-        <ContentCard
-          v-for="(item, index) in items"
-          :key="item.id"
-          :item="item"
-          :index="index"
-          v-reveal="index * 60"
-        />
+        <template v-if="section === 'people'">
+          <PeopleCard
+            v-for="(item, index) in items"
+            :key="item.id"
+            :item="item"
+            v-reveal="index * 60"
+          />
+        </template>
+        <template v-else>
+          <ContentCard
+            v-for="(item, index) in items"
+            :key="item.id"
+            :item="item"
+            :index="index"
+            v-reveal="index * 60"
+          />
+        </template>
       </div>
       <EmptyState v-else-if="!error" />
 

@@ -7,7 +7,7 @@ import EmptyState from '../components/EmptyState.vue'
 import SectionHeading from '../components/SectionHeading.vue'
 import SkeletonCard from '../components/SkeletonCard.vue'
 
-const home = ref<Content>()
+
 const news = ref<Content[]>([])
 const projects = ref<Content[]>([])
 const honors = ref<Content[]>([])
@@ -19,7 +19,7 @@ function retry() {
 }
 
 const heroTitle = computed(() =>
-  (home.value?.summary || '让好奇发生，让想法生长。').replace('，', '，\n'),
+  ('让好奇发生，让想法生长。').replace('，', '，\n'),
 )
 const heroLines = computed(() => heroTitle.value.split('\n').filter(Boolean))
 
@@ -27,15 +27,20 @@ const modules = ['MACHINE LEARNING', 'COMPUTER VISION', 'INTELLIGENT SYSTEMS']
 
 onMounted(async () => {
   try {
-    const [h, n, p, a] = await Promise.all([
-      api.get('/public/pages/home'),
-      api.get('/public/contents', { params: { type: 'NEWS,ACTIVITY', size: 3 } }),
+    const [n, p, a] = await Promise.all([
+      api.get('/public/contents', {
+        params: { type: 'NEWS,ACTIVITY', featured: true, size: 3 },
+      }),
       api.get('/public/contents', { params: { type: 'PROJECT', featured: true, size: 3 } }),
       api.get('/public/contents', {
-        params: { type: 'PROJECT', category: '竞赛获奖,科研成果', size: 3 },
+        params: {
+          type: 'PROJECT',
+          category: '竞赛获奖,科研成果',
+          featured: true,
+          size: 3,
+        },
       }),
     ])
-    home.value = h.data
     news.value = n.data.items
     projects.value = p.data.items
     honors.value = a.data.items
@@ -70,10 +75,9 @@ onMounted(async () => {
             </span>
           </h1>
 
-          <div v-if="home" class="nx-hero__rich" v-html="home.body"></div>
-          <p v-else class="nx-hero__rich">
-            聚焦人工智能、竞赛实践与科研探索，把好奇心变成可以运行的作品。
-          </p>
+          <div class="nx-hero__rich">
+            <p>聚焦人工智能、竞赛实践与科研探索，把好奇心变成可以运行的作品。</p>
+          </div>
 
           <div class="nx-hero__actions">
             <RouterLink class="nx-btn nx-btn--primary" to="/projects">
@@ -94,22 +98,7 @@ onMounted(async () => {
         </div>
 
         <div class="nx-hero__visual">
-          <div v-if="home?.coverId" class="nx-hero__cover">
-            <div class="nx-hero__cover-frame">
-              <img :src="mediaUrl(home.coverId)" alt="社团精选图片" />
-              <span class="nx-hero__cover-scan" aria-hidden="true"></span>
-            </div>
-            <div class="nx-hero__cover-chip nx-hero__cover-chip--top">
-              <small>FEATURED</small>
-              <b>社团精选</b>
-            </div>
-            <div class="nx-hero__cover-chip nx-hero__cover-chip--bottom">
-              <span class="nx-live"><i></i> AI CLUB</span>
-              <b>{{ home.title || '人工智能社' }}</b>
-            </div>
-          </div>
-
-          <div v-else class="nx-orbit">
+          <div class="nx-orbit">
             <div class="nx-orbit__ring nx-orbit__ring--1"></div>
             <div class="nx-orbit__ring nx-orbit__ring--2"></div>
             <div class="nx-orbit__ring nx-orbit__ring--3"></div>
@@ -135,7 +124,7 @@ onMounted(async () => {
       </div>
 
       <div class="nx-hero__bottom">
-        <span>{{ home?.title || '人工智能社' }} / AI CLUB</span>
+        <span>{{ '人工智能社' }} / AI CLUB</span>
         <span class="nx-hero__scroll">SCROLL TO EXPLORE <i>↓</i></span>
         <span>ARTIFICIAL INTELLIGENCE CLUB</span>
       </div>

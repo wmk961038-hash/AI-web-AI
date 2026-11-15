@@ -697,6 +697,15 @@ ol {
   flex-shrink: 0;
 }
 
+.nx-brand__mark {
+  display: block;
+  width: 52px;
+  height: 44px;
+  flex: 0 0 auto;
+  object-fit: contain;
+  filter: drop-shadow(0 0 16px rgba(56, 189, 248, 0.24));
+}
+
 .nx-brand__text {
   display: flex;
   flex-direction: column;
@@ -993,42 +1002,61 @@ ol {
 
 .nx-footer__logo {
   display: inline-flex;
-  align-items: center;
-  gap: 14px;
+  max-width: 100%;
 }
 
-.nx-footer__logo-mark {
+.nx-footer__logo-plate {
   display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-family: var(--nx-font-display);
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.04em;
-  padding: 8px 12px;
-  border: 1px solid var(--nx-line-strong);
-  border-radius: 12px;
+  max-width: 100%;
+  padding: 12px 16px;
+  border: 1px solid rgba(147, 197, 253, 0.38);
+  border-radius: 14px;
+  background: linear-gradient(145deg, #ffffff, #eef4ff);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transition:
+    transform 0.35s var(--nx-ease),
+    border-color 0.35s,
+    box-shadow 0.35s;
 }
 
-.nx-footer__logo-mark span {
-  color: var(--nx-cyan);
-  font-size: 14px;
+.nx-footer__logo:hover .nx-footer__logo-plate {
+  transform: translateY(-2px);
+  border-color: rgba(94, 234, 212, 0.65);
+  box-shadow:
+    0 20px 48px rgba(0, 0, 0, 0.34),
+    0 0 24px rgba(94, 234, 212, 0.12);
 }
 
-.nx-footer__logo-text {
-  display: flex;
-  flex-direction: column;
-  font-size: 15px;
-  font-weight: 650;
+.nx-footer__logo-plate img {
+  display: block;
+  width: min(260px, 100%);
+  height: auto;
 }
 
-.nx-footer__logo-text small {
-  margin-top: 4px;
+.nx-footer__school {
+  max-width: 340px;
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px solid var(--nx-line);
+}
+
+.nx-footer__school-label {
+  display: block;
   font-family: var(--nx-font-mono);
   font-size: 8px;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.18em;
   color: var(--nx-dim);
-  font-weight: 400;
+}
+
+.nx-footer__school img {
+  display: block;
+  width: min(320px, 100%);
+  height: auto;
+  margin-top: 10px;
+  opacity: 0.9;
+  filter: drop-shadow(0 0 18px rgba(255, 255, 255, 0.06));
 }
 
 .nx-footer__brand p {
@@ -1161,11 +1189,24 @@ ol {
   .nx-header__inner {
     height: 76px;
   }
+  .nx-brand__mark {
+    width: 44px;
+    height: 38px;
+  }
   .nx-brand__text small {
     display: none;
   }
   .nx-brand__text strong {
     font-size: 15px;
+  }
+  .nx-footer__logo-plate {
+    padding: 10px 13px;
+  }
+  .nx-footer__logo-plate img {
+    width: min(230px, 100%);
+  }
+  .nx-footer__school {
+    max-width: 100%;
   }
   .nx-header__admin {
     display: none;

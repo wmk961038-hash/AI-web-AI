@@ -14,6 +14,7 @@ public class Content {
   private String type;
   private String title;
   private String category;
+  private String personRole;
   private String summary;
   private String body;
   private Long coverId;

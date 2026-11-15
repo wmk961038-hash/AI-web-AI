@@ -6,6 +6,13 @@ import { DomEditor, type IDomEditor, type IEditorConfig } from '@wangeditor/edit
 import '@wangeditor/editor/dist/css/style.css'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { api, labels, message, meta, type Content, type Meta } from '../api'
+import {
+  allowedTypes,
+  categoriesFor,
+  defaultCategory,
+  sectionByKey,
+  sectionOfType,
+} from '../sections'
 
 const route = useRoute()
 const router = useRouter()
@@ -34,15 +41,21 @@ const id = ref<number>()
 const status = ref('DRAFT')
 
 const isNew = computed(() => !id.value)
-const categories = computed(() =>
-  form.value.type === 'PROJECT'
-    ? ['技术项目', '竞赛获奖', '科研成果']
-    : form.value.type === 'ACTIVITY'
-      ? ['活动预告', '活动回顾']
-      : form.value.type === 'PERSON'
-        ? ['指导老师', '社团骨干', '成员']
-        : ['新闻动态'],
-)
+const sectionQuery = computed(() => String(route.query.section || ''))
+const categories = computed(() => categoriesFor(form.value.type))
+const typeOptions = computed(() => {
+  if (!isNew.value) return [form.value.type]
+  const types = allowedTypes(sectionQuery.value)
+  return types.length ? types : ['NEWS']
+})
+const backPath = computed(() => {
+  const section = sectionOfType(form.value.type) || sectionByKey(sectionQuery.value)
+  return section ? `/admin/section/${section.key}` : '/admin'
+})
+
+function changeType() {
+  form.value.category = categories.value[0] || defaultCategory(form.value.type)
+}
 
 const statusText = computed(() =>
   status.value === 'PUBLISHED' ? '已发布' : status.value === 'TRASH' ? '回收站' : '草稿',
@@ -157,6 +170,14 @@ onMounted(async () => {
   try {
     if (route.params.id !== 'new') {
       const { data } = await api.get<Content>('/admin/contents/' + route.params.id)
+      if (data.type === 'PAGE') {
+        await router.replace('/admin/pages/' + data.category)
+        return
+      }
+      if (data.type === 'PERSON') {
+        await router.replace('/admin/people/' + data.id)
+        return
+      }
       const {
         type,
         title,
@@ -186,6 +207,19 @@ onMounted(async () => {
       fields.value = { ...meta(data), gallery: meta(data).gallery || [] }
       id.value = data.id
       status.value = data.status
+    } else {
+      const section = sectionByKey(sectionQuery.value)
+      if (!section || section.kind !== 'collection') {
+        await router.replace('/admin')
+        return
+      }
+      if (section.key === 'people') {
+        await router.replace('/admin/people/new')
+        return
+      }
+      const firstType = section.types[0]
+      form.value.type = firstType
+      form.value.category = defaultCategory(firstType)
     }
     ready.value = true
   } catch (e) {
@@ -234,10 +268,10 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', unload))
   <div class="nx-editor">
     <header class="nx-editor__top">
       <div class="nx-editor__top-left">
-        <RouterLink class="nx-back" to="/admin"><i>←</i> 返回内容管理</RouterLink>
+        <RouterLink class="nx-back" :to="backPath"><i>←</i> 返回栏目列表</RouterLink>
         <div class="nx-editor__heading">
-          <p class="nx-kicker">CONTENT EDITOR / {{ statusText }}</p>
-          <h1>{{ isNew ? '新建内容' : '编辑内容' }}</h1>
+          <p class="nx-kicker">SECTION EDITOR / {{ statusText }}</p>
+          <h1>{{ isNew ? '新增内容' : '编辑内容' }}</h1>
         </div>
       </div>
       <div class="nx-editor__top-actions">
@@ -374,10 +408,6 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', unload))
               <label class="nx-form-row">
                 <span>图片来源与署名</span><input v-model="fields.credit" maxlength="500" />
               </label>
-              <label v-if="form.type === 'PAGE' && form.category === 'join'" class="nx-form-row">
-                <span>外部报名链接</span>
-                <input v-model="fields.joinUrl" type="url" placeholder="https://…" />
-              </label>
             </div>
           </section>
 
@@ -423,41 +453,32 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', unload))
             <label class="nx-form-row">
               <span>内容类型</span>
               <select
+                v-if="typeOptions.length > 1"
                 v-model="form.type"
                 :disabled="!isNew"
-                @change="form.category = categories[0] || ''"
+                @change="changeType"
               >
-                <option
-                  v-for="(name, key) in labels"
-                  v-show="key !== 'PAGE' || !isNew"
-                  :value="key"
-                  :key="key"
-                >
-                  {{ name }}
+                <option v-for="type in typeOptions" :key="type" :value="type">
+                  {{ labels[type] }}
                 </option>
               </select>
+              <input v-else :value="labels[form.type]" disabled />
             </label>
 
             <label class="nx-form-row">
               <span>分类</span>
-              <input v-if="form.type === 'PAGE'" :value="form.category" disabled />
-              <select v-else v-model="form.category">
+              <select v-model="form.category">
                 <option v-for="c in categories" :key="c">{{ c }}</option>
               </select>
             </label>
 
-            <label class="nx-form-row">
-              <span>排序<small>数值越小越靠前</small></span>
-              <input v-model.number="form.sortOrder" type="number" min="-100000" max="100000" />
-            </label>
-
             <label class="nx-check">
               <input v-model="form.featured" type="checkbox" />
-              <span><b>首页推荐项目</b><small>展示在首页重点项目区域</small></span>
+              <span><b>首页推荐</b><small>展示在首页对应内容区域</small></span>
             </label>
             <label class="nx-check">
               <input v-model="form.pinned" type="checkbox" />
-              <span><b>置顶动态</b><small>优先展示在新闻动态列表</small></span>
+              <span><b>置顶内容</b><small>优先展示在当前栏目列表</small></span>
             </label>
             <label v-if="form.type === 'PERSON'" class="nx-check">
               <input v-model="form.archived" type="checkbox" />
@@ -465,9 +486,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', unload))
             </label>
 
             <div class="nx-editor__cover">
-              <h3>
-                {{ form.type === 'PAGE' && form.category === 'home' ? '首页精选图片' : '封面图片' }}
-              </h3>
+              <h3>封面图片</h3>
               <div v-if="form.coverId" class="nx-editor__cover-preview">
                 <img :src="`/api/media/${form.coverId}`" alt="封面预览" />
                 <button type="button" @click="removeCover">移除封面</button>

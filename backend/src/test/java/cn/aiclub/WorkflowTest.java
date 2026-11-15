@@ -10,6 +10,7 @@ import cn.aiclub.model.*;
 import com.fasterxml.jackson.databind.*;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.time.LocalDateTime;
 import java.util.*;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.*;
@@ -145,6 +146,46 @@ class WorkflowTest {
   }
 
   @Test
+  void pinnedContentComesFirstThenUploadTimeDescending() throws Exception {
+    LocalDateTime now = LocalDateTime.now();
+    Content pinnedOld = orderFixture("置顶旧内容", 99, true, now.minusDays(3));
+    Content ordinaryNew = orderFixture("普通新内容", 0, false, now.minusDays(1));
+    Content ordinaryOlder = orderFixture("普通旧内容", 1, false, now.minusDays(2));
+    contents.insert(pinnedOld);
+    contents.insert(ordinaryNew);
+    contents.insert(ordinaryOlder);
+
+    mvc.perform(
+            get("/api/public/contents")
+                .param("type", "NEWS")
+                .param("category", "上传时间排序测试"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items[0].title").value("置顶旧内容"))
+        .andExpect(jsonPath("$.items[1].title").value("普通新内容"))
+        .andExpect(jsonPath("$.items[2].title").value("普通旧内容"));
+  }
+
+  Content orderFixture(String title, int sortOrder, boolean pinned, LocalDateTime createdAt) {
+    var c = new Content();
+    c.setType("NEWS");
+    c.setTitle(title);
+    c.setCategory("上传时间排序测试");
+    c.setSummary("排序测试");
+    c.setBody("<p>排序测试</p>");
+    c.setMetadata("{}");
+    c.setStatus("PUBLISHED");
+    c.setSortOrder(sortOrder);
+    c.setFeatured(false);
+    c.setPinned(pinned);
+    c.setArchived(false);
+    c.setVersion(0);
+    c.setCreatedAt(createdAt);
+    c.setUpdatedAt(createdAt);
+    c.setPublishedAt(createdAt);
+    return c;
+  }
+
+  @Test
   void bothRolesCanEditPreviewPublishUnpublishTrashAndRestore() throws Exception {
     for (String role : List.of("ADMIN", "SUPER_ADMIN")) {
       var session = login(account(role));
@@ -221,6 +262,10 @@ class WorkflowTest {
                   .content(json.writeValueAsString(Map.of("version", version))))
           .andExpect(status().isBadRequest());
       var person = input("PERSON");
+      person.put("category", "社团骨干");
+      person.put("personRole", "社长 / 计算机视觉");
+      person.put("body", "<p>人物简介：负责社团计算机视觉方向。</p>");
+      person.put("coverId", upload(session));
       person.put("archived", true);
       person.put("sortOrder", -2);
       person.put("metadata", Map.of("cohort", "2026"));
@@ -233,6 +278,12 @@ class WorkflowTest {
                   .param("cohort", "2026"))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.total").value(org.hamcrest.Matchers.greaterThan(0)));
+      mvc.perform(get("/api/public/contents/" + personId))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.personRole").value("社长 / 计算机视觉"));
+      mvc.perform(get("/api/public/people/categories"))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$", org.hamcrest.Matchers.hasItem("社团骨干")));
       var project = input("PROJECT");
       project.put("featured", true);
       project.put("pinned", true);
@@ -243,6 +294,75 @@ class WorkflowTest {
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.total").value(org.hamcrest.Matchers.greaterThan(0)));
     }
+  }
+
+  @Test
+  void personRequiresFiveFieldsAndExposesPublishedCategories() throws Exception {
+    var session = login(account("ADMIN"));
+    long image = upload(session);
+    var person = input("PERSON");
+    person.put("category", "测试人物类别");
+    person.put("personRole", "研究员 / 多模态");
+    person.put("body", "<p>这是一段人物简介。</p>");
+    person.put("coverId", image);
+
+    var missingRole = new HashMap<>(person);
+    missingRole.remove("personRole");
+    mvc.perform(
+            post("/api/admin/contents")
+                .session(session)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(missingRole)))
+        .andExpect(status().isBadRequest());
+
+    var missingImage = new HashMap<>(person);
+    missingImage.remove("coverId");
+    mvc.perform(
+            post("/api/admin/contents")
+                .session(session)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(missingImage)))
+        .andExpect(status().isBadRequest());
+
+    var emptyBio = new HashMap<>(person);
+    emptyBio.put("body", "<p> </p>");
+    mvc.perform(
+            post("/api/admin/contents")
+                .session(session)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(emptyBio)))
+        .andExpect(status().isBadRequest());
+
+    var commaCategory = new HashMap<>(person);
+    commaCategory.put("category", "甲,乙");
+    mvc.perform(
+            post("/api/admin/contents")
+                .session(session)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(commaCategory)))
+        .andExpect(status().isBadRequest());
+
+    long id = create(session, person).get("id").asLong();
+    String draftCategories =
+        mvc.perform(get("/api/public/people/categories"))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    assertThat(draftCategories).doesNotContain("测试人物类别");
+
+    transition(session, id, "publish", 0);
+    String publishedCategories =
+        mvc.perform(get("/api/public/people/categories"))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    assertThat(publishedCategories).contains("测试人物类别");
   }
 
   @Test

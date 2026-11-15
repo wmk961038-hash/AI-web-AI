@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import BrandMark from './BrandMark.vue'
 
 const route = useRoute()
 const open = ref(false)
@@ -64,7 +63,14 @@ const progressStyle = computed(() => ({ transform: `scaleX(${progress.value})` }
   <header class="nx-header" :class="{ 'is-scrolled': scrolled, 'is-open': open }">
     <div class="nx-header__inner">
       <RouterLink class="nx-brand" to="/" aria-label="人工智能社首页">
-        <BrandMark />
+        <img
+          class="nx-brand__mark"
+          src="/brand/club-mark.png"
+          alt=""
+          width="52"
+          height="44"
+          decoding="async"
+        />
         <span class="nx-brand__text">
           <strong>人工智能社</strong>
           <small>ARTIFICIAL INTELLIGENCE CLUB</small>

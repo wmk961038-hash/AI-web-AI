@@ -1,0 +1,1 @@
+ALTER TABLE content ADD COLUMN person_role VARCHAR(100) NOT NULL DEFAULT '';

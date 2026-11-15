@@ -17,7 +17,7 @@ const pageKey = computed(() => route.fullPath)
 
 <template>
   <div class="nx-app" :class="{ 'is-admin': isAdmin, 'is-login': isLogin }">
-    <a class="nx-skip" href="#main">跳转到主要内容</a>
+    <a v-if="!isAdmin" class="nx-skip" href="#main">跳转到主要内容</a>
 
     <AuroraBackground />
     <ParticleField v-if="!isAdmin" />

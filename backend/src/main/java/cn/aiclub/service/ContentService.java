@@ -24,6 +24,7 @@ public class ContentService {
       @NotNull @Pattern(regexp = "NEWS|ACTIVITY|PROJECT|PERSON|PAGE") String type,
       @NotBlank @Size(max = 180) String title,
       @NotNull @Size(max = 80) String category,
+      @Size(max = 100) String personRole,
       @NotNull @Size(max = 600) String summary,
       @NotNull @Size(max = 200000) String body,
       @Positive Long coverId,
@@ -80,10 +81,17 @@ public class ContentService {
     else q.ne("status", "TRASH");
     long total = contents.selectCount(q);
     q.orderByDesc("pinned")
-        .orderByAsc("sort_order")
+        .orderByDesc("created_at")
         .orderByDesc("id")
         .last("LIMIT " + size + " OFFSET " + ((page - 1) * size));
     return Map.of("items", contents.selectList(q), "total", total, "page", page, "size", size);
+  }
+
+  public List<String> publicPersonCategories() {
+    return db.queryForList(
+        "SELECT DISTINCT category FROM content WHERE type='PERSON' AND status='PUBLISHED'"
+            + " AND category <> '' ORDER BY category",
+        String.class);
   }
 
   @Transactional
@@ -148,6 +156,18 @@ public class ContentService {
             "https://club.invalid",
             Safelist.relaxed().preserveRelativeLinks(true).addAttributes("*", "class"));
     var doc = Jsoup.parseBodyFragment(body);
+    boolean person = "PERSON".equals(in.type());
+    String category = in.category();
+    String personRole = null;
+    if (person) {
+      category = in.category().trim();
+      personRole = in.personRole() == null ? "" : in.personRole().trim();
+      if (category.isBlank()) bad("请填写师生类别");
+      if (category.contains(",")) bad("类别不能包含英文逗号");
+      if (personRole.isBlank()) bad("请填写职务方向");
+      if (in.coverId() == null) bad("请上传相关图片");
+      if (doc.text().isBlank()) bad("请填写简介");
+    }
     Set<Long> refs = new HashSet<>();
     for (var img : doc.select("img")) {
       String src = img.attr("src");
@@ -165,7 +185,8 @@ public class ContentService {
     for (Long ref : refs) if (media.selectById(ref) == null) bad("引用的图片不存在");
     c.setType(in.type());
     c.setTitle(in.title().trim());
-    c.setCategory(in.category());
+    c.setCategory(category);
+    c.setPersonRole(person ? personRole : null);
     c.setSummary(in.summary());
     c.setBody(doc.body().html());
     c.setMetadata(meta.toString());

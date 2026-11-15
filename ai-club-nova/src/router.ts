@@ -48,6 +48,21 @@ export const router = createRouter({
       meta: { admin: true, title: '内容管理' },
     },
     {
+      path: '/admin/pages/:key',
+      component: () => import('./views/PageEditor.vue'),
+      meta: { admin: true, title: '编辑页面' },
+    },
+    {
+      path: '/admin/section/:section',
+      component: () => import('./views/SectionManager.vue'),
+      meta: { admin: true, title: '栏目管理' },
+    },
+    {
+      path: '/admin/people/:id',
+      component: () => import('./views/PersonEditor.vue'),
+      meta: { admin: true, title: '编辑师生' },
+    },
+    {
       path: '/admin/edit/:id',
       component: () => import('./views/Editor.vue'),
       meta: { admin: true, title: '编辑内容' },
